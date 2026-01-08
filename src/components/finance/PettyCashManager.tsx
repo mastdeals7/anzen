@@ -195,6 +195,7 @@ export function PettyCashManager({ canManage }: PettyCashManagerProps) {
         .is('matched_entry_id', null)
         .is('matched_expense_id', null)
         .is('matched_receipt_id', null)
+        .is('matched_petty_cash_id', null)
         .order('transaction_date', { ascending: false })
         .limit(50);
 
@@ -346,7 +347,7 @@ export function PettyCashManager({ canManage }: PettyCashManagerProps) {
         const { error: linkError } = await supabase
           .from('bank_statement_lines')
           .update({
-            matched_entry_id: transaction.id,
+            matched_petty_cash_id: transaction.id,
             reconciliation_status: 'matched',
             matched_at: new Date().toISOString(),
             matched_by: user.id,
