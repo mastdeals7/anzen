@@ -1339,6 +1339,18 @@ export function ExpenseManager({ canManage }: ExpenseManagerProps) {
                 );
               })
             )}
+            {/* Totals Row */}
+            {!loading && sortedExpenses.length > 0 && (
+              <tr className="bg-blue-50 border-t-2 border-blue-200 font-bold">
+                <td colSpan={4} className="px-6 py-3 text-right text-gray-900">
+                  TOTAL ({sortedExpenses.length} expenses):
+                </td>
+                <td className="px-6 py-3 text-right text-gray-900 font-bold">
+                  Rp {sortedExpenses.reduce((sum, exp) => sum + exp.amount, 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </td>
+                <td colSpan={canManage ? 4 : 3}></td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

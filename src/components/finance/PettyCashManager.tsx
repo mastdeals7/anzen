@@ -750,6 +750,21 @@ export function PettyCashManager({ canManage }: PettyCashManagerProps) {
                   )}
                 </tr>
               ))}
+              {/* Totals Row */}
+              {transactions.length > 0 && (
+                <tr className="bg-blue-50 border-t-2 border-blue-200 font-bold">
+                  <td colSpan={5} className="px-4 py-3 text-right text-gray-900">
+                    TOTAL ({transactions.length} transactions):
+                  </td>
+                  <td className="px-4 py-3 text-right text-blue-700 font-bold">
+                    Rp {transactions.filter(t => t.transaction_type === 'withdraw').reduce((sum, t) => sum + t.amount, 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                  <td className="px-4 py-3 text-right text-red-700 font-bold">
+                    Rp {transactions.filter(t => t.transaction_type === 'expense').reduce((sum, t) => sum + t.amount, 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                  {canManage && <td></td>}
+                </tr>
+              )}
               {transactions.length === 0 && (
                 <tr>
                   <td colSpan={canManage ? 9 : 8} className="px-4 py-12 text-center text-gray-500">

@@ -1918,22 +1918,48 @@ export function BankReconciliationEnhanced({ canManage }: BankReconciliationEnha
                   <td className="px-3 py-2 text-right text-green-600 font-medium whitespace-nowrap">
                     {line.credit > 0 ? `${getCurrencySymbol(line.currency)} ${line.credit.toLocaleString('id-ID')}` : '-'}
                   </td>
-                  <td className="px-3 py-2 text-center">
-                    {(line.status === 'matched' || line.status === 'recorded') && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                        <CheckCircle2 className="w-3 h-3" /> Recorded
-                      </span>
-                    )}
-                    {line.status === 'suggested' && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">
-                        <AlertCircle className="w-3 h-3" /> Review
-                      </span>
-                    )}
-                    {line.status === 'unmatched' && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
-                        <XCircle className="w-3 h-3" /> Unrecorded
-                      </span>
-                    )}
+                  <td className="px-3 py-2">
+                    <div className="flex flex-col gap-1">
+                      {(line.status === 'matched' || line.status === 'recorded') && (
+                        <>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                            <CheckCircle2 className="w-3 h-3" /> Recorded
+                          </span>
+                          {/* Show what it's linked to */}
+                          {line.matchedExpense && (
+                            <span className="text-xs text-gray-600">
+                              → Expense: {line.matchedExpense.expense_category}
+                            </span>
+                          )}
+                          {line.matchedReceipt && (
+                            <span className="text-xs text-gray-600">
+                              → Receipt: {line.matchedReceipt.customer_name || 'Customer'}
+                            </span>
+                          )}
+                          {line.matchedPettyCash && (
+                            <span className="text-xs text-gray-600">
+                              → Petty Cash: {line.matchedPettyCash.transaction_type}
+                            </span>
+                          )}
+                          {/* Warn if no actual link */}
+                          {!line.matchedExpense && !line.matchedReceipt && !line.matchedPettyCash && !line.matchedEntry && (
+                            <span className="text-xs text-orange-600 font-medium">
+                              ⚠️ No link found
+                            </span>
+                          )}
+                        </>
+                      )}
+                      {line.status === 'suggested' && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">
+                          <AlertCircle className="w-3 h-3" /> Review
+                        </span>
+                      )}
+                      {line.status === 'unmatched' && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                          <XCircle className="w-3 h-3" /> Unrecorded
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-3 py-2 text-center">
                     <div className="flex items-center justify-center gap-1">
@@ -1978,6 +2004,21 @@ export function BankReconciliationEnhanced({ canManage }: BankReconciliationEnha
                   </td>
                 </tr>
               ))}
+              {/* Totals Row */}
+              <tr className="bg-blue-50 border-t-2 border-blue-200 font-bold">
+                <td colSpan={2} className="px-3 py-3 text-right text-gray-900">
+                  TOTAL ({sortedLines.length} transactions):
+                </td>
+                <td className="px-3 py-3 text-right text-red-700 font-bold whitespace-nowrap">
+                  {getCurrencySymbol(selectedAccount?.currency || 'IDR')} {sortedLines.reduce((sum, line) => sum + line.debit, 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </td>
+                <td className="px-3 py-3 text-right text-green-700 font-bold whitespace-nowrap">
+                  {getCurrencySymbol(selectedAccount?.currency || 'IDR')} {sortedLines.reduce((sum, line) => sum + line.credit, 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </td>
+                <td colSpan={2} className="px-3 py-3 text-center text-gray-600 text-sm">
+                  Net: {getCurrencySymbol(selectedAccount?.currency || 'IDR')} {(sortedLines.reduce((sum, line) => sum + line.credit, 0) - sortedLines.reduce((sum, line) => sum + line.debit, 0)).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
