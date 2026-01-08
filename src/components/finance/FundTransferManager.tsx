@@ -8,10 +8,15 @@ interface FundTransfer {
   transfer_number: string;
   transfer_date: string;
   amount: number;
+  from_amount: number;
+  to_amount: number;
+  exchange_rate: number | null;
   from_account_type: string;
   to_account_type: string;
   from_account_name: string;
   to_account_name: string;
+  from_currency: string | null;
+  to_currency: string | null;
   description: string | null;
   status: string;
   posted_at: string | null;
@@ -24,6 +29,16 @@ interface BankAccount {
   bank_name: string;
   account_number: string;
   alias: string | null;
+  currency: string;
+}
+
+interface BankStatementLine {
+  id: string;
+  transaction_date: string;
+  description: string | null;
+  debit_amount: number | null;
+  credit_amount: number | null;
+  reconciliation_status: string | null;
 }
 
 interface FundTransferManagerProps {
@@ -33,15 +48,20 @@ interface FundTransferManagerProps {
 export function FundTransferManager({ canManage }: FundTransferManagerProps) {
   const [transfers, setTransfers] = useState<FundTransfer[]>([]);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
+  const [fromBankStatements, setFromBankStatements] = useState<BankStatementLine[]>([]);
+  const [toBankStatements, setToBankStatements] = useState<BankStatementLine[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [formData, setFormData] = useState({
     transfer_date: new Date().toISOString().split('T')[0],
-    amount: 0,
+    from_amount: 0,
+    to_amount: 0,
     from_account_type: 'bank' as 'petty_cash' | 'cash_on_hand' | 'bank',
-    to_account_type: 'petty_cash' as 'petty_cash' | 'cash_on_hand' | 'bank',
+    to_account_type: 'bank' as 'petty_cash' | 'cash_on_hand' | 'bank',
     from_bank_account_id: '',
     to_bank_account_id: '',
+    from_bank_statement_line_id: '',
+    to_bank_statement_line_id: '',
     description: '',
   });
 
@@ -61,7 +81,7 @@ export function FundTransferManager({ canManage }: FundTransferManagerProps) {
           .limit(100),
         supabase
           .from('bank_accounts')
-          .select('id, bank_name, account_number, alias')
+          .select('id, bank_name, account_number, alias, currency')
           .eq('is_active', true)
           .order('bank_name'),
       ]);
@@ -79,11 +99,67 @@ export function FundTransferManager({ canManage }: FundTransferManagerProps) {
     }
   };
 
+  const loadBankStatements = async (bankAccountId: string, type: 'from' | 'to') => {
+    if (!bankAccountId) {
+      if (type === 'from') setFromBankStatements([]);
+      else setToBankStatements([]);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('bank_statement_lines')
+        .select('id, transaction_date, description, debit_amount, credit_amount, reconciliation_status')
+        .eq('bank_account_id', bankAccountId)
+        .is('matched_fund_transfer_id', null)
+        .order('transaction_date', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+
+      if (type === 'from') setFromBankStatements(data || []);
+      else setToBankStatements(data || []);
+    } catch (error) {
+      console.error('Error loading bank statements:', error);
+    }
+  };
+
+  const getFromCurrency = (): string => {
+    if (formData.from_account_type === 'bank' && formData.from_bank_account_id) {
+      const account = bankAccounts.find(b => b.id === formData.from_bank_account_id);
+      return account?.currency || 'IDR';
+    }
+    return 'IDR';
+  };
+
+  const getToCurrency = (): string => {
+    if (formData.to_account_type === 'bank' && formData.to_bank_account_id) {
+      const account = bankAccounts.find(b => b.id === formData.to_bank_account_id);
+      return account?.currency || 'IDR';
+    }
+    return 'IDR';
+  };
+
+  const calculateExchangeRate = (): number | null => {
+    const fromCurrency = getFromCurrency();
+    const toCurrency = getToCurrency();
+
+    if (formData.from_amount > 0 && formData.to_amount > 0 && fromCurrency !== toCurrency) {
+      return formData.to_amount / formData.from_amount;
+    }
+    return null;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (formData.amount <= 0) {
-      alert('Amount must be greater than 0');
+    if (formData.from_amount <= 0) {
+      alert('From Amount must be greater than 0');
+      return;
+    }
+
+    if (formData.to_amount <= 0) {
+      alert('To Amount must be greater than 0');
       return;
     }
 
@@ -119,10 +195,15 @@ export function FundTransferManager({ canManage }: FundTransferManagerProps) {
 
       if (numberError) throw numberError;
 
+      const exchangeRate = calculateExchangeRate();
+
       const transferData: any = {
         transfer_number: transferNumber,
         transfer_date: formData.transfer_date,
-        amount: formData.amount,
+        amount: formData.from_amount,  // For backwards compatibility
+        from_amount: formData.from_amount,
+        to_amount: formData.to_amount,
+        exchange_rate: exchangeRate,
         from_account_type: formData.from_account_type,
         to_account_type: formData.to_account_type,
         description: formData.description || null,
@@ -135,6 +216,14 @@ export function FundTransferManager({ canManage }: FundTransferManagerProps) {
 
       if (formData.to_account_type === 'bank') {
         transferData.to_bank_account_id = formData.to_bank_account_id;
+      }
+
+      if (formData.from_bank_statement_line_id) {
+        transferData.from_bank_statement_line_id = formData.from_bank_statement_line_id;
+      }
+
+      if (formData.to_bank_statement_line_id) {
+        transferData.to_bank_statement_line_id = formData.to_bank_statement_line_id;
       }
 
       const { error } = await supabase
@@ -156,13 +245,18 @@ export function FundTransferManager({ canManage }: FundTransferManagerProps) {
   const resetForm = () => {
     setFormData({
       transfer_date: new Date().toISOString().split('T')[0],
-      amount: 0,
+      from_amount: 0,
+      to_amount: 0,
       from_account_type: 'bank',
-      to_account_type: 'petty_cash',
+      to_account_type: 'bank',
       from_bank_account_id: '',
       to_bank_account_id: '',
+      from_bank_statement_line_id: '',
+      to_bank_statement_line_id: '',
       description: '',
     });
+    setFromBankStatements([]);
+    setToBankStatements([]);
   };
 
   const getAccountTypeLabel = (type: string) => {
@@ -267,7 +361,26 @@ export function FundTransferManager({ canManage }: FundTransferManagerProps) {
                     {transfer.description || '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-gray-900">
-                    Rp {transfer.amount.toLocaleString('id-ID')}
+                    {transfer.from_currency === transfer.to_currency ? (
+                      <div>
+                        {transfer.from_currency === 'USD' ? '$' : 'Rp'} {transfer.from_amount.toLocaleString('id-ID')}
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <div className="text-red-600">
+                          {transfer.from_currency === 'USD' ? '$' : 'Rp'} {transfer.from_amount.toLocaleString('id-ID')}
+                        </div>
+                        <div className="text-xs text-gray-500">→</div>
+                        <div className="text-green-600">
+                          {transfer.to_currency === 'USD' ? '$' : 'Rp'} {transfer.to_amount.toLocaleString('id-ID')}
+                        </div>
+                        {transfer.exchange_rate && (
+                          <div className="text-xs text-gray-500">
+                            Rate: {transfer.exchange_rate.toFixed(6)}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
                     {getStatusBadge(transfer.status)}
@@ -290,33 +403,17 @@ export function FundTransferManager({ canManage }: FundTransferManagerProps) {
           maxWidth="max-w-2xl"
         >
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Transfer Date <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="date"
-                  value={formData.transfer_date}
-                  onChange={(e) => setFormData({ ...formData, transfer_date: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Amount (Rp) <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={formData.amount || ''}
-                  onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                  required
-                  min="0.01"
-                />
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Transfer Date <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="date"
+                value={formData.transfer_date}
+                onChange={(e) => setFormData({ ...formData, transfer_date: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                required
+              />
             </div>
 
             <div className="border-2 border-blue-200 rounded-lg p-4 bg-blue-50">
@@ -348,14 +445,63 @@ export function FundTransferManager({ canManage }: FundTransferManagerProps) {
                     </label>
                     <select
                       value={formData.from_bank_account_id}
-                      onChange={(e) => setFormData({ ...formData, from_bank_account_id: e.target.value })}
+                      onChange={(e) => {
+                        setFormData({ ...formData, from_bank_account_id: e.target.value, from_bank_statement_line_id: '' });
+                        loadBankStatements(e.target.value, 'from');
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                       required
                     >
                       <option value="">Select Bank Account</option>
                       {bankAccounts.map((bank) => (
                         <option key={bank.id} value={bank.id}>
-                          {bank.alias || bank.bank_name} - {bank.account_number}
+                          {bank.alias || bank.bank_name} - {bank.account_number} ({bank.currency})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Amount ({getFromCurrency()}) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formData.from_amount || ''}
+                    onChange={(e) => {
+                      const newAmount = parseFloat(e.target.value) || 0;
+                      const fromCurrency = getFromCurrency();
+                      const toCurrency = getToCurrency();
+
+                      // Auto-set to_amount if same currency
+                      if (fromCurrency === toCurrency) {
+                        setFormData({ ...formData, from_amount: newAmount, to_amount: newAmount });
+                      } else {
+                        setFormData({ ...formData, from_amount: newAmount });
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    required
+                    min="0.01"
+                  />
+                </div>
+                {formData.from_bank_account_id && fromBankStatements.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      🔗 Link to Bank Statement (Optional)
+                    </label>
+                    <select
+                      value={formData.from_bank_statement_line_id}
+                      onChange={(e) => setFormData({ ...formData, from_bank_statement_line_id: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    >
+                      <option value="">No link</option>
+                      {fromBankStatements.map((stmt) => (
+                        <option key={stmt.id} value={stmt.id}>
+                          {new Date(stmt.transaction_date).toLocaleDateString()} -
+                          {stmt.description?.substring(0, 40)} -
+                          {getFromCurrency() === 'USD' ? '$' : 'Rp'} {(stmt.debit_amount || stmt.credit_amount || 0).toLocaleString('id-ID')}
                         </option>
                       ))}
                     </select>
@@ -397,14 +543,57 @@ export function FundTransferManager({ canManage }: FundTransferManagerProps) {
                     </label>
                     <select
                       value={formData.to_bank_account_id}
-                      onChange={(e) => setFormData({ ...formData, to_bank_account_id: e.target.value })}
+                      onChange={(e) => {
+                        setFormData({ ...formData, to_bank_account_id: e.target.value, to_bank_statement_line_id: '' });
+                        loadBankStatements(e.target.value, 'to');
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                       required
                     >
                       <option value="">Select Bank Account</option>
                       {bankAccounts.map((bank) => (
                         <option key={bank.id} value={bank.id}>
-                          {bank.alias || bank.bank_name} - {bank.account_number}
+                          {bank.alias || bank.bank_name} - {bank.account_number} ({bank.currency})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Amount ({getToCurrency()}) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formData.to_amount || ''}
+                    onChange={(e) => setFormData({ ...formData, to_amount: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    required
+                    min="0.01"
+                  />
+                  {getFromCurrency() !== getToCurrency() && formData.from_amount > 0 && formData.to_amount > 0 && (
+                    <p className="text-xs text-gray-600 mt-1">
+                      Exchange Rate: 1 {getFromCurrency()} = {(formData.to_amount / formData.from_amount).toFixed(6)} {getToCurrency()}
+                    </p>
+                  )}
+                </div>
+                {formData.to_bank_account_id && toBankStatements.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      🔗 Link to Bank Statement (Optional)
+                    </label>
+                    <select
+                      value={formData.to_bank_statement_line_id}
+                      onChange={(e) => setFormData({ ...formData, to_bank_statement_line_id: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    >
+                      <option value="">No link</option>
+                      {toBankStatements.map((stmt) => (
+                        <option key={stmt.id} value={stmt.id}>
+                          {new Date(stmt.transaction_date).toLocaleDateString()} -
+                          {stmt.description?.substring(0, 40)} -
+                          {getToCurrency() === 'USD' ? '$' : 'Rp'} {(stmt.debit_amount || stmt.credit_amount || 0).toLocaleString('id-ID')}
                         </option>
                       ))}
                     </select>
