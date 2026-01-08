@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Plus, ArrowRightLeft, CheckCircle, Clock } from 'lucide-react';
+import { Plus, ArrowRightLeft, CheckCircle, Clock, Edit, Trash2 } from 'lucide-react';
 import { Modal } from '../Modal';
 
 interface FundTransfer {
@@ -17,6 +17,10 @@ interface FundTransfer {
   to_account_name: string;
   from_currency: string | null;
   to_currency: string | null;
+  from_bank_account_id: string | null;
+  to_bank_account_id: string | null;
+  from_bank_statement_line_id: string | null;
+  to_bank_statement_line_id: string | null;
   description: string | null;
   status: string;
   posted_at: string | null;
@@ -52,6 +56,7 @@ export function FundTransferManager({ canManage }: FundTransferManagerProps) {
   const [toBankStatements, setToBankStatements] = useState<BankStatementLine[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingTransfer, setEditingTransfer] = useState<FundTransfer | null>(null);
   const [formData, setFormData] = useState({
     transfer_date: new Date().toISOString().split('T')[0],
     from_amount: 0,
@@ -189,56 +194,85 @@ export function FundTransferManager({ canManage }: FundTransferManagerProps) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      // Generate transfer number
-      const { data: transferNumber, error: numberError } = await supabase
-        .rpc('generate_fund_transfer_number');
-
-      if (numberError) throw numberError;
-
       const exchangeRate = calculateExchangeRate();
 
-      const transferData: any = {
-        transfer_number: transferNumber,
-        transfer_date: formData.transfer_date,
-        amount: formData.from_amount,  // For backwards compatibility
-        from_amount: formData.from_amount,
-        to_amount: formData.to_amount,
-        exchange_rate: exchangeRate,
-        from_account_type: formData.from_account_type,
-        to_account_type: formData.to_account_type,
-        description: formData.description || null,
-        created_by: user.id,
-      };
+      if (editingTransfer) {
+        // UPDATE existing transfer
+        const transferData: any = {
+          transfer_date: formData.transfer_date,
+          amount: formData.from_amount,  // For backwards compatibility
+          from_amount: formData.from_amount,
+          to_amount: formData.to_amount,
+          exchange_rate: exchangeRate,
+          from_account_type: formData.from_account_type,
+          to_account_type: formData.to_account_type,
+          description: formData.description || null,
+          from_bank_account_id: formData.from_account_type === 'bank' ? formData.from_bank_account_id : null,
+          to_bank_account_id: formData.to_account_type === 'bank' ? formData.to_bank_account_id : null,
+          from_bank_statement_line_id: formData.from_bank_statement_line_id || null,
+          to_bank_statement_line_id: formData.to_bank_statement_line_id || null,
+        };
 
-      if (formData.from_account_type === 'bank') {
-        transferData.from_bank_account_id = formData.from_bank_account_id;
+        const { error } = await supabase
+          .from('fund_transfers')
+          .update(transferData)
+          .eq('id', editingTransfer.id);
+
+        if (error) throw error;
+
+        alert('Fund transfer updated successfully!');
+      } else {
+        // CREATE new transfer
+        // Generate transfer number
+        const { data: transferNumber, error: numberError } = await supabase
+          .rpc('generate_fund_transfer_number');
+
+        if (numberError) throw numberError;
+
+        const transferData: any = {
+          transfer_number: transferNumber,
+          transfer_date: formData.transfer_date,
+          amount: formData.from_amount,  // For backwards compatibility
+          from_amount: formData.from_amount,
+          to_amount: formData.to_amount,
+          exchange_rate: exchangeRate,
+          from_account_type: formData.from_account_type,
+          to_account_type: formData.to_account_type,
+          description: formData.description || null,
+          created_by: user.id,
+        };
+
+        if (formData.from_account_type === 'bank') {
+          transferData.from_bank_account_id = formData.from_bank_account_id;
+        }
+
+        if (formData.to_account_type === 'bank') {
+          transferData.to_bank_account_id = formData.to_bank_account_id;
+        }
+
+        if (formData.from_bank_statement_line_id) {
+          transferData.from_bank_statement_line_id = formData.from_bank_statement_line_id;
+        }
+
+        if (formData.to_bank_statement_line_id) {
+          transferData.to_bank_statement_line_id = formData.to_bank_statement_line_id;
+        }
+
+        const { error } = await supabase
+          .from('fund_transfers')
+          .insert([transferData]);
+
+        if (error) throw error;
+
+        alert('Fund transfer created and posted successfully!');
       }
 
-      if (formData.to_account_type === 'bank') {
-        transferData.to_bank_account_id = formData.to_bank_account_id;
-      }
-
-      if (formData.from_bank_statement_line_id) {
-        transferData.from_bank_statement_line_id = formData.from_bank_statement_line_id;
-      }
-
-      if (formData.to_bank_statement_line_id) {
-        transferData.to_bank_statement_line_id = formData.to_bank_statement_line_id;
-      }
-
-      const { error } = await supabase
-        .from('fund_transfers')
-        .insert([transferData]);
-
-      if (error) throw error;
-
-      alert('Fund transfer created and posted successfully!');
       setModalOpen(false);
       resetForm();
       loadData();
     } catch (error: any) {
-      console.error('Error creating fund transfer:', error.message);
-      alert('Failed to create fund transfer: ' + error.message);
+      console.error('Error with fund transfer:', error.message);
+      alert('Failed to save fund transfer: ' + error.message);
     }
   };
 
@@ -257,6 +291,56 @@ export function FundTransferManager({ canManage }: FundTransferManagerProps) {
     });
     setFromBankStatements([]);
     setToBankStatements([]);
+    setEditingTransfer(null);
+  };
+
+  const handleEdit = async (transfer: FundTransfer) => {
+    setEditingTransfer(transfer);
+
+    // Populate form with existing data
+    setFormData({
+      transfer_date: transfer.transfer_date,
+      from_amount: transfer.from_amount,
+      to_amount: transfer.to_amount,
+      from_account_type: transfer.from_account_type as any,
+      to_account_type: transfer.to_account_type as any,
+      from_bank_account_id: transfer.from_bank_account_id || '',
+      to_bank_account_id: transfer.to_bank_account_id || '',
+      from_bank_statement_line_id: transfer.from_bank_statement_line_id || '',
+      to_bank_statement_line_id: transfer.to_bank_statement_line_id || '',
+      description: transfer.description || '',
+    });
+
+    // Load bank statements if bank accounts are selected
+    if (transfer.from_bank_account_id) {
+      loadBankStatements(transfer.from_bank_account_id, 'from');
+    }
+    if (transfer.to_bank_account_id) {
+      loadBankStatements(transfer.to_bank_account_id, 'to');
+    }
+
+    setModalOpen(true);
+  };
+
+  const handleDelete = async (transferId: string) => {
+    if (!confirm('Are you sure you want to delete this fund transfer? This will also delete the associated journal entry.')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('fund_transfers')
+        .delete()
+        .eq('id', transferId);
+
+      if (error) throw error;
+
+      alert('Fund transfer deleted successfully!');
+      loadData();
+    } catch (error: any) {
+      console.error('Error deleting fund transfer:', error.message);
+      alert('Failed to delete fund transfer: ' + error.message);
+    }
   };
 
   const getAccountTypeLabel = (type: string) => {
@@ -322,18 +406,19 @@ export function FundTransferManager({ canManage }: FundTransferManagerProps) {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
               <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
+              {canManage && <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>}
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={canManage ? 9 : 8} className="px-6 py-8 text-center text-gray-500">
                   Loading...
                 </td>
               </tr>
             ) : transfers.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={canManage ? 9 : 8} className="px-6 py-8 text-center text-gray-500">
                   No fund transfers found
                 </td>
               </tr>
@@ -385,6 +470,26 @@ export function FundTransferManager({ canManage }: FundTransferManagerProps) {
                   <td className="px-6 py-4 whitespace-nowrap text-center">
                     {getStatusBadge(transfer.status)}
                   </td>
+                  {canManage && (
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => handleEdit(transfer)}
+                          className="text-blue-600 hover:text-blue-800"
+                          title="Edit Transfer"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(transfer.id)}
+                          className="text-red-600 hover:text-red-800"
+                          title="Delete Transfer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))
             )}
@@ -399,7 +504,7 @@ export function FundTransferManager({ canManage }: FundTransferManagerProps) {
             setModalOpen(false);
             resetForm();
           }}
-          title="New Fund Transfer"
+          title={editingTransfer ? "Edit Fund Transfer" : "New Fund Transfer"}
           maxWidth="max-w-2xl"
         >
           <form onSubmit={handleSubmit} className="space-y-4">
