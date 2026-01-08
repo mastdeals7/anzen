@@ -440,32 +440,57 @@ export function ExpenseManager({ canManage }: ExpenseManagerProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    console.log('=== EXPENSE FORM SUBMIT ===');
+    console.log('Editing:', !!editingExpense);
+    console.log('Files to upload:', uploadingFiles.length);
+    console.log('Existing URLs:', formData.document_urls);
+
     try {
       const category = expenseCategories.find(c => c.value === formData.expense_category);
 
       // Upload new files first
       const uploadedUrls: string[] = [];
       if (uploadingFiles.length > 0) {
+        console.log('=== UPLOADING', uploadingFiles.length, 'FILES ===');
+
         for (const file of uploadingFiles) {
-          const fileName = `${Date.now()}_${file.name}`;
+          console.log('Uploading file:', file.name, '(', file.size, 'bytes)');
+
+          const fileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
           const filePath = `${formData.expense_category}/${fileName}`;
 
-          const { error: uploadError } = await supabase.storage
-            .from('expense-documents')
-            .upload(filePath, file);
+          console.log('Storage path:', filePath);
 
-          if (uploadError) throw uploadError;
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from('expense-documents')
+            .upload(filePath, file, {
+              cacheControl: '3600',
+              upsert: false
+            });
+
+          if (uploadError) {
+            console.error('Upload error:', uploadError);
+            throw new Error(`Failed to upload ${file.name}: ${uploadError.message}`);
+          }
+
+          console.log('Upload successful:', uploadData);
 
           const { data: { publicUrl } } = supabase.storage
             .from('expense-documents')
             .getPublicUrl(filePath);
 
+          console.log('Public URL:', publicUrl);
           uploadedUrls.push(publicUrl);
         }
+
+        console.log('All uploads complete. Uploaded URLs:', uploadedUrls);
+      } else {
+        console.log('No new files to upload');
       }
 
       // Combine existing URLs with newly uploaded ones
       const allDocumentUrls = [...formData.document_urls, ...uploadedUrls];
+      console.log('Combined document URLs:', allDocumentUrls);
 
       const expenseData = {
         expense_category: formData.expense_category,
@@ -482,6 +507,10 @@ export function ExpenseManager({ canManage }: ExpenseManagerProps) {
         paid_by: formData.payment_method === 'cash' ? 'cash' : 'bank',
         document_urls: allDocumentUrls.length > 0 ? allDocumentUrls : null,
       };
+
+      console.log('=== EXPENSE DATA TO SAVE ===');
+      console.log('document_urls:', expenseData.document_urls);
+      console.log('Full expense data:', expenseData);
 
       if (editingExpense) {
         // Check if user changed payment method to cash - move to Petty Cash
@@ -529,12 +558,20 @@ export function ExpenseManager({ canManage }: ExpenseManagerProps) {
           alert('Expense moved to Petty Cash successfully');
         } else {
           // Regular update
+          console.log('=== UPDATING EXPENSE ===');
+          console.log('Expense ID:', editingExpense.id);
+
           const { error } = await supabase
             .from('finance_expenses')
             .update(expenseData)
             .eq('id', editingExpense.id);
 
-          if (error) throw error;
+          if (error) {
+            console.error('Update error:', error);
+            throw error;
+          }
+
+          console.log('Update successful! Fetching updated data...');
 
           // Fetch the updated expense with relations
           const { data: updatedExpense, error: fetchError } = await supabase
@@ -558,7 +595,14 @@ export function ExpenseManager({ canManage }: ExpenseManagerProps) {
             .eq('id', editingExpense.id)
             .single();
 
-          if (fetchError) throw fetchError;
+          if (fetchError) {
+            console.error('Fetch error:', fetchError);
+            throw fetchError;
+          }
+
+          console.log('=== FETCHED UPDATED EXPENSE ===');
+          console.log('document_urls from DB:', updatedExpense.document_urls);
+          console.log('Full updated expense:', updatedExpense);
 
           // Update in local state
           setExpenses(prev => prev.map(exp =>
@@ -619,6 +663,8 @@ export function ExpenseManager({ canManage }: ExpenseManagerProps) {
           if (pettyCashError) throw pettyCashError;
           alert('Expense recorded in Petty Cash successfully');
         } else {
+          console.log('=== CREATING NEW EXPENSE ===');
+
           const { data: newExpense, error } = await supabase
             .from('finance_expenses')
             .insert([{ ...expenseData, created_by: user.id }])
@@ -640,7 +686,14 @@ export function ExpenseManager({ canManage }: ExpenseManagerProps) {
             `)
             .single();
 
-          if (error) throw error;
+          if (error) {
+            console.error('Insert error:', error);
+            throw error;
+          }
+
+          console.log('=== NEW EXPENSE CREATED ===');
+          console.log('document_urls from DB:', newExpense?.document_urls);
+          console.log('Full new expense:', newExpense);
 
           // Link to bank transaction if selected
           if (selectedBankTransactionId && newExpense) {
