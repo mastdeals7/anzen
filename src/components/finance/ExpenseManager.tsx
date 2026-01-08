@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Plus, DollarSign, Package, Truck, Building2, Edit, Trash2, FileText, Upload, X, ExternalLink, Download, ArrowRightLeft, Eye } from 'lucide-react';
+import { Plus, DollarSign, Package, Truck, Building2, CreditCard as Edit, Trash2, FileText, Upload, X, ExternalLink, Download, ArrowRightLeft, Eye } from 'lucide-react';
 import { Modal } from '../Modal';
 import { FileUpload } from '../FileUpload';
 
