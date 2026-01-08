@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Plus, DollarSign, Package, Truck, Building2, Edit, Trash2, FileText, Upload, X, ExternalLink, Download, ArrowRightLeft } from 'lucide-react';
+import { Plus, DollarSign, Package, Truck, Building2, Edit, Trash2, FileText, Upload, X, ExternalLink, Download, ArrowRightLeft, Eye } from 'lucide-react';
 import { Modal } from '../Modal';
 import { FileUpload } from '../FileUpload';
 
@@ -295,6 +295,8 @@ export function ExpenseManager({ canManage }: ExpenseManagerProps) {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<FinanceExpense | null>(null);
+  const [viewingExpense, setViewingExpense] = useState<FinanceExpense | null>(null);
+  const [viewModalOpen, setViewModalOpen] = useState(false);
   const [filterType, setFilterType] = useState<'all' | 'import' | 'sales' | 'staff' | 'operations' | 'admin'>('all');
   const [reconFilter, setReconFilter] = useState<'all' | 'reconciled' | 'not_reconciled'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -1310,6 +1312,16 @@ export function ExpenseManager({ canManage }: ExpenseManagerProps) {
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         <div className="flex items-center justify-center gap-2">
                           <button
+                            onClick={() => {
+                              setViewingExpense(expense);
+                              setViewModalOpen(true);
+                            }}
+                            className="text-purple-600 hover:text-purple-800"
+                            title="View Details"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
                             onClick={() => handleEdit(expense)}
                             className="text-blue-600 hover:text-blue-800"
                             title="Edit"
@@ -1773,6 +1785,183 @@ export function ExpenseManager({ canManage }: ExpenseManagerProps) {
               </button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {viewModalOpen && viewingExpense && (
+        <Modal
+          isOpen={viewModalOpen}
+          onClose={() => {
+            setViewModalOpen(false);
+            setViewingExpense(null);
+          }}
+          title="Expense Details"
+          maxWidth="max-w-3xl"
+        >
+          <div className="space-y-6">
+            {/* Basic Information */}
+            <div className="grid grid-cols-2 gap-6 pb-4 border-b">
+              <div>
+                <label className="text-xs text-gray-500 font-medium uppercase">Date</label>
+                <p className="text-sm text-gray-900 mt-1 font-medium">
+                  {new Date(viewingExpense.expense_date).toLocaleDateString()}
+                </p>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 font-medium uppercase">Amount</label>
+                <p className="text-lg text-gray-900 mt-1 font-bold">
+                  Rp {viewingExpense.amount.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 font-medium uppercase">Category</label>
+                <p className="text-sm text-gray-900 mt-1">
+                  {expenseCategories.find(c => c.value === viewingExpense.expense_category)?.label || viewingExpense.expense_category}
+                </p>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 font-medium uppercase">Type</label>
+                <p className="text-sm text-gray-900 mt-1 capitalize">
+                  {viewingExpense.expense_type || '-'}
+                </p>
+              </div>
+            </div>
+
+            {/* Description */}
+            <div>
+              <label className="text-xs text-gray-500 font-medium uppercase">Description</label>
+              <p className="text-sm text-gray-900 mt-1">
+                {viewingExpense.description || '-'}
+              </p>
+            </div>
+
+            {/* Payment Information */}
+            <div className="grid grid-cols-2 gap-6 pb-4 border-b">
+              <div>
+                <label className="text-xs text-gray-500 font-medium uppercase">Payment Method</label>
+                <p className="text-sm text-gray-900 mt-1 capitalize">
+                  {viewingExpense.payment_method?.replace('_', ' ') || '-'}
+                </p>
+              </div>
+              {viewingExpense.bank_accounts && (
+                <div>
+                  <label className="text-xs text-gray-500 font-medium uppercase">Bank Account</label>
+                  <p className="text-sm text-gray-900 mt-1">
+                    {viewingExpense.bank_accounts.bank_name} - {viewingExpense.bank_accounts.account_number}
+                  </p>
+                </div>
+              )}
+              {viewingExpense.payment_reference && (
+                <div>
+                  <label className="text-xs text-gray-500 font-medium uppercase">Payment Reference</label>
+                  <p className="text-sm text-gray-900 mt-1">
+                    {viewingExpense.payment_reference}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Context Links */}
+            {(viewingExpense.batches || viewingExpense.import_containers || viewingExpense.delivery_challans) && (
+              <div className="space-y-3 pb-4 border-b">
+                <label className="text-xs text-gray-500 font-medium uppercase">Linked To</label>
+                {viewingExpense.batches && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Package className="w-4 h-4 text-blue-600" />
+                    <span className="text-blue-700 font-medium">Batch: {viewingExpense.batches.batch_number}</span>
+                  </div>
+                )}
+                {viewingExpense.import_containers && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Package className="w-4 h-4 text-green-600" />
+                    <span className="text-green-700 font-medium">Container: {viewingExpense.import_containers.container_ref}</span>
+                  </div>
+                )}
+                {viewingExpense.delivery_challans && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Truck className="w-4 h-4 text-green-600" />
+                    <span className="text-green-700 font-medium">Delivery Challan: {viewingExpense.delivery_challans.challan_number}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Bank Reconciliation Status */}
+            {viewingExpense.bank_statement_lines && viewingExpense.bank_statement_lines.length > 0 && (
+              <div className="pb-4 border-b">
+                <label className="text-xs text-gray-500 font-medium uppercase mb-2 block">Bank Reconciliation</label>
+                <div className="space-y-2">
+                  {viewingExpense.bank_statement_lines.map((line) => (
+                    <div key={line.id} className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded">
+                      <span className="text-xs text-green-700">
+                        ✓ Linked to Bank Statement: {new Date(line.transaction_date).toLocaleDateString()} -
+                        {line.bank_accounts?.bank_name} {line.bank_accounts?.account_number} -
+                        Rp {(line.debit_amount || line.credit_amount || 0).toLocaleString('id-ID')}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Documents */}
+            {viewingExpense.document_urls && viewingExpense.document_urls.length > 0 && (
+              <div>
+                <label className="text-xs text-gray-500 font-medium uppercase mb-3 block">
+                  <FileText className="w-4 h-4 inline mr-1" />
+                  Supporting Documents ({viewingExpense.document_urls.length})
+                </label>
+                <div className="grid grid-cols-1 gap-2">
+                  {viewingExpense.document_urls.map((url, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <FileText className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                        <span className="text-sm text-blue-900 font-medium">Document {index + 1}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-700 bg-white border border-blue-300 rounded hover:bg-blue-50"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          View
+                        </a>
+                        <a
+                          href={url}
+                          download
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-green-700 bg-white border border-green-300 rounded hover:bg-green-50"
+                        >
+                          <Download className="w-3 h-3" />
+                          Download
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(!viewingExpense.document_urls || viewingExpense.document_urls.length === 0) && (
+              <div className="text-center py-4 text-gray-500 text-sm italic">
+                No supporting documents attached
+              </div>
+            )}
+
+            {/* Close Button */}
+            <div className="flex justify-end pt-4 border-t">
+              <button
+                onClick={() => {
+                  setViewModalOpen(false);
+                  setViewingExpense(null);
+                }}
+                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </Modal>
       )}
     </div>
