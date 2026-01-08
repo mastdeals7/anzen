@@ -543,7 +543,6 @@ export function ExpenseManager({ canManage }: ExpenseManagerProps) {
               import_containers (container_ref),
               delivery_challans (challan_number),
               bank_accounts (bank_name, account_number),
-              petty_cash_transactions (transaction_number),
               bank_statement_lines (
                 id,
                 transaction_date,
@@ -627,7 +626,6 @@ export function ExpenseManager({ canManage }: ExpenseManagerProps) {
               import_containers (container_ref),
               delivery_challans (challan_number),
               bank_accounts (bank_name, account_number),
-              petty_cash_transactions (transaction_number),
               bank_statement_lines (
                 id,
                 transaction_date,
@@ -789,7 +787,6 @@ export function ExpenseManager({ canManage }: ExpenseManagerProps) {
           import_containers (container_ref),
           delivery_challans (challan_number),
           bank_accounts (bank_name, account_number),
-          petty_cash_transactions (transaction_number),
           bank_statement_lines (
             id,
             transaction_date,
