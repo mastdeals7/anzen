@@ -89,21 +89,174 @@ export function BankReconciliationEnhanced({ canManage }: BankReconciliationEnha
   const [customers, setCustomers] = useState<Array<{ id: string; company_name: string }>>([]);
 
   const expenseCategories = [
-    { value: 'duty_customs', label: 'Duty & Customs (BM)', type: 'import' },
-    { value: 'ppn_import', label: 'PPN Import', type: 'import' },
-    { value: 'pph_import', label: 'PPh Import', type: 'import' },
-    { value: 'freight_import', label: 'Freight (Import)', type: 'import' },
-    { value: 'clearing_forwarding', label: 'Clearing & Forwarding', type: 'import' },
-    { value: 'port_charges', label: 'Port Charges', type: 'import' },
-    { value: 'container_handling', label: 'Container Handling', type: 'import' },
-    { value: 'transport_import', label: 'Transport (Import)', type: 'import' },
-    { value: 'delivery_sales', label: 'Delivery/Sales', type: 'sales' },
-    { value: 'loading_sales', label: 'Loading', type: 'sales' },
-    { value: 'warehouse_rent', label: 'Warehouse Rent', type: 'admin' },
-    { value: 'utilities', label: 'Utilities', type: 'admin' },
-    { value: 'bank_charges', label: 'Bank Charges', type: 'admin' },
-    { value: 'salary', label: 'Salary', type: 'admin' },
-    { value: 'office_admin', label: 'Office & Admin', type: 'admin' },
+    {
+      value: 'duty_customs',
+      label: 'Duty & Customs (BM)',
+      type: 'import',
+      requiresContainer: true,
+      group: 'Import Costs'
+    },
+    {
+      value: 'ppn_import',
+      label: 'PPN Import',
+      type: 'import',
+      requiresContainer: true,
+      group: 'Import Costs'
+    },
+    {
+      value: 'pph_import',
+      label: 'PPh Import',
+      type: 'import',
+      requiresContainer: true,
+      group: 'Import Costs'
+    },
+    {
+      value: 'freight_import',
+      label: 'Freight (Import)',
+      type: 'import',
+      requiresContainer: true,
+      group: 'Import Costs'
+    },
+    {
+      value: 'clearing_forwarding',
+      label: 'Clearing & Forwarding',
+      type: 'import',
+      requiresContainer: true,
+      group: 'Import Costs'
+    },
+    {
+      value: 'port_charges',
+      label: 'Port Charges',
+      type: 'import',
+      requiresContainer: true,
+      group: 'Import Costs'
+    },
+    {
+      value: 'container_handling',
+      label: 'Container Handling',
+      type: 'import',
+      requiresContainer: true,
+      group: 'Import Costs'
+    },
+    {
+      value: 'transport_import',
+      label: 'Transportation (Import)',
+      type: 'import',
+      requiresContainer: true,
+      group: 'Import Costs'
+    },
+    {
+      value: 'loading_import',
+      label: 'Loading / Unloading (Import)',
+      type: 'import',
+      requiresContainer: true,
+      group: 'Import Costs'
+    },
+    {
+      value: 'bpom_ski_fees',
+      label: 'BPOM / SKI Fees',
+      type: 'import',
+      requiresContainer: true,
+      group: 'Import Costs'
+    },
+    {
+      value: 'other_import',
+      label: 'Other (Import)',
+      type: 'import',
+      requiresContainer: true,
+      group: 'Import Costs'
+    },
+    {
+      value: 'delivery_sales',
+      label: 'Delivery / Dispatch (Sales)',
+      type: 'sales',
+      requiresContainer: false,
+      group: 'Sales & Distribution'
+    },
+    {
+      value: 'loading_sales',
+      label: 'Loading / Unloading (Sales)',
+      type: 'sales',
+      requiresContainer: false,
+      group: 'Sales & Distribution'
+    },
+    {
+      value: 'other_sales',
+      label: 'Other (Sales)',
+      type: 'sales',
+      requiresContainer: false,
+      group: 'Sales & Distribution'
+    },
+    {
+      value: 'salary',
+      label: 'Salary',
+      type: 'staff',
+      requiresContainer: false,
+      group: 'Staff Costs'
+    },
+    {
+      value: 'staff_overtime',
+      label: 'Staff Overtime',
+      type: 'staff',
+      requiresContainer: false,
+      group: 'Staff Costs'
+    },
+    {
+      value: 'staff_welfare',
+      label: 'Staff Welfare / Allowances',
+      type: 'staff',
+      requiresContainer: false,
+      group: 'Staff Costs'
+    },
+    {
+      value: 'travel_conveyance',
+      label: 'Travel & Conveyance',
+      type: 'staff',
+      requiresContainer: false,
+      group: 'Staff Costs'
+    },
+    {
+      value: 'warehouse_rent',
+      label: 'Warehouse Rent',
+      type: 'operations',
+      requiresContainer: false,
+      group: 'Operations'
+    },
+    {
+      value: 'utilities',
+      label: 'Utilities',
+      type: 'operations',
+      requiresContainer: false,
+      group: 'Operations'
+    },
+    {
+      value: 'bank_charges',
+      label: 'Bank Charges',
+      type: 'operations',
+      requiresContainer: false,
+      group: 'Operations'
+    },
+    {
+      value: 'office_admin',
+      label: 'Office & Admin',
+      type: 'admin',
+      requiresContainer: false,
+      group: 'Administrative'
+    },
+    {
+      value: 'office_shifting_renovation',
+      label: 'Office Shifting & Renovation',
+      type: 'admin',
+      requiresContainer: false,
+      group: 'Administrative'
+    },
+    {
+      value: 'other',
+      label: 'Other',
+      type: 'admin',
+      requiresContainer: false,
+      group: 'Administrative'
+    },
   ];
 
   useEffect(() => {
@@ -1897,11 +2050,46 @@ export function BankReconciliationEnhanced({ canManage }: BankReconciliationEnha
                         className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="">Select category...</option>
-                        {expenseCategories.map(cat => (
-                          <option key={cat.value} value={cat.value}>
-                            {cat.label} ({cat.type})
-                          </option>
-                        ))}
+
+                        <optgroup label="═══ IMPORT COSTS (Capitalized to Inventory) ═══">
+                          {expenseCategories.filter(c => c.group === 'Import Costs').map((cat) => (
+                            <option key={cat.value} value={cat.value}>
+                              {cat.label}
+                            </option>
+                          ))}
+                        </optgroup>
+
+                        <optgroup label="═══ SALES & DISTRIBUTION (P&L Expense) ═══">
+                          {expenseCategories.filter(c => c.group === 'Sales & Distribution').map((cat) => (
+                            <option key={cat.value} value={cat.value}>
+                              {cat.label}
+                            </option>
+                          ))}
+                        </optgroup>
+
+                        <optgroup label="═══ STAFF COSTS (P&L Expense) ═══">
+                          {expenseCategories.filter(c => c.group === 'Staff Costs').map((cat) => (
+                            <option key={cat.value} value={cat.value}>
+                              {cat.label}
+                            </option>
+                          ))}
+                        </optgroup>
+
+                        <optgroup label="═══ OPERATIONS (P&L Expense) ═══">
+                          {expenseCategories.filter(c => c.group === 'Operations').map((cat) => (
+                            <option key={cat.value} value={cat.value}>
+                              {cat.label}
+                            </option>
+                          ))}
+                        </optgroup>
+
+                        <optgroup label="═══ ADMINISTRATIVE (P&L Expense) ═══">
+                          {expenseCategories.filter(c => c.group === 'Administrative').map((cat) => (
+                            <option key={cat.value} value={cat.value}>
+                              {cat.label}
+                            </option>
+                          ))}
+                        </optgroup>
                       </select>
                     </div>
                     <div>
