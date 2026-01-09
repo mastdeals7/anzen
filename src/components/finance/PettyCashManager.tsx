@@ -220,9 +220,18 @@ export function PettyCashManager({ canManage }: PettyCashManagerProps) {
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, fileType: string) => {
+    console.log('=== FILE SELECTED ===');
+    console.log('File type:', fileType);
+
     if (e.target.files) {
       const newFiles = Array.from(e.target.files).map(file => ({ file, type: fileType }));
-      setUploadingFiles(prev => [...prev, ...newFiles]);
+      console.log('Files selected:', newFiles.map(f => ({ name: f.file.name, size: f.file.size, type: f.type })));
+
+      setUploadingFiles(prev => {
+        const updated = [...prev, ...newFiles];
+        console.log('Total files to upload:', updated.length);
+        return updated;
+      });
     }
   };
 
@@ -362,21 +371,36 @@ export function PettyCashManager({ canManage }: PettyCashManagerProps) {
 
       // Upload files if any
       if (uploadingFiles.length > 0 && transaction) {
+        console.log('=== UPLOADING FILES TO PETTY CASH ===');
+        console.log('Transaction ID:', transaction.id);
+        console.log('Files to upload:', uploadingFiles.length);
+
         for (const { file, type } of uploadingFiles) {
+          console.log('Uploading file:', file.name, 'Type:', type);
+
           const fileExt = file.name.split('.').pop();
           const fileName = `${transaction.id}/${Date.now()}_${type}.${fileExt}`;
-          
-          const { error: uploadError } = await supabase.storage
+
+          console.log('Storage path:', fileName);
+
+          const { data: uploadData, error: uploadError } = await supabase.storage
             .from('petty-cash-receipts')
             .upload(fileName, file);
 
-          if (!uploadError) {
+          if (uploadError) {
+            console.error('Upload error:', uploadError);
+            alert(`Failed to upload ${file.name}: ${uploadError.message}`);
+          } else {
+            console.log('Upload successful:', uploadData);
+
             const { data: urlData } = supabase.storage
               .from('petty-cash-receipts')
               .getPublicUrl(fileName);
 
+            console.log('Public URL:', urlData.publicUrl);
+
             if (urlData) {
-              await supabase.from('petty_cash_documents').insert({
+              const { error: dbError } = await supabase.from('petty_cash_documents').insert({
                 petty_cash_transaction_id: transaction.id,
                 file_type: type,
                 file_name: file.name,
@@ -384,9 +408,17 @@ export function PettyCashManager({ canManage }: PettyCashManagerProps) {
                 file_size: file.size,
                 uploaded_by: user.id,
               });
+
+              if (dbError) {
+                console.error('Database insert error:', dbError);
+              } else {
+                console.log('Document record saved to database');
+              }
             }
           }
         }
+
+        console.log('All files processed');
       }
 
       // Fetch the complete transaction with relations
